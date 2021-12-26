@@ -1,104 +1,90 @@
-import React, { FC, ChangeEvent, useState } from "react"
-import "./App.css"
-import { ITask } from "./Interfaces"
-import TodoTask from "./components/TodoTask"
-import CompletedTask from "./components/CompletedTask"
+import React, { useState, MouseEvent } from "react";
+import "./App.css";
+import { Difficulty, fetchQuizQuestions, QuestionState } from "./API";
+import QuestionCard, { AnswerObject } from "./components/QuestionCard";
 
-const App: FC = () => {
-  const [task, setTask] = useState<string>("");
-  const [deadline, setDeadline] = useState<number>(1);
-  const [todoList, setTodoList] = useState<ITask[]>([]);
-  const [completedList, setCompletedList] = useState<ITask[]>([]);
+const TOTAL_QUESTIONS = 10;
 
-  // force descending
-  function compareDate (a: ITask, b: ITask) {
-    if ( a.dateCreated < b.dateCreated ){
-      return 1;
-    }
-    if ( a.dateCreated > b.dateCreated ){
-      return -1;
-    }
-    return 0;
-  }
+const App = () => {
+  const [loading, setLoading] = useState(false);
+  const [questions, setQuestions] = useState<QuestionState[]>([]);
+  const [number, setNumber] = useState(0);
+  const [userAnswers, setUserAnswers] = useState<AnswerObject[]>([]);
+  const [score, setScore] = useState(0);
+  const [gameOver, setGameOver] = useState(true);
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>): void => {
-    if (e.target.name === "task") setTask(e.target.value); //!(todoList.some(task => task.taskName === e.target.value))
-    else if (e.target.name === "deadline" && Number(e.target.value) > 0) setDeadline(Number(e.target.value));
+  const startTrivia = async () => {
+    setLoading(true);
+    setGameOver(false);
+
+    const newQuestions = await fetchQuizQuestions(
+      TOTAL_QUESTIONS,
+      Difficulty.EASY
+    );
+
+    setQuestions(newQuestions);
+    setScore(0);
+    setUserAnswers([]);
+    setNumber(0);
+    setLoading(false);
   };
 
-  const addTask = (): void => {
-    const newTask = { taskName: task, deadline: deadline, dateCreated: new Date() }
-    setTodoList([newTask, ...todoList])
-    setTask("")
-    setDeadline(1)
+  const checkAnswer = (e: MouseEvent<HTMLButtonElement>) => {
+    if (!gameOver) {
+      const answer = e.currentTarget.value;
+      const correct = questions[number].correct_answer === answer;
+
+      if (correct) setScore(score + 1);
+
+      const answerObject = {
+        question: questions[number].question,
+        answer,
+        correct,
+        correctAnswer: questions[number].correct_answer,
+      };
+
+      setUserAnswers([...userAnswers, answerObject]);
+    }
   };
 
-  const completeTask = (completedTask: string): void => {
-    setCompletedList([...completedList, ...todoList.filter((task) => {
-      return task.taskName === completedTask
-    })].sort(compareDate))
-    setTodoList(todoList.filter((task) => {
-      return task.taskName !== completedTask
-    }))
-  }
-  
-  const undoTask = (completedTask: string): void => {
-    setTodoList([...todoList, ...completedList.filter((task) => {
-      return task.taskName === completedTask
-    })].sort(compareDate))
-    setCompletedList(completedList.filter((task) => {
-      return task.taskName !== completedTask
-    }))
-  }
+  const nextQuestion = () => {
+    if (number + 1 === TOTAL_QUESTIONS) setGameOver(true);
+    else setNumber(number + 1);
+  };
 
   return (
     <div className="App">
-      <div className="title">Todo List</div>
-      <div className="header">
-        <div className="inputContainer">
-          <input
-            type="text"
-            placeholder="Task..."
-            name="task"
-            value={task}
-            onChange={handleChange}
-          />
-          <input
-            type="number"
-            placeholder="Deadline (in Days)..."
-            name="deadline"
-            value={deadline}
-            onChange={handleChange}
-          />
-        </div>
-        <button onClick={addTask}>Add Task</button>
-      </div>
-      <div className="listHeading"></div>
-      <div className="todoList">
-        <div className="task">
-          <div className="content">
-            <span>Task</span>
-            <span>Task Length</span>
-            <span>Date Created</span>
-          </div>
-            <button>Complete</button>
-        </div>  
-        {todoList.map((task: ITask, key: number) => {
-          return <TodoTask key={key} task={task} completeTask={completeTask} />;
-        })}
-      </div>
-      <div className="completedList">
-        <div className="completedTask">
-          <div className="content">
-            <span>Task</span>
-            <span>Date Created</span>
-          </div>
-            <button>Undo</button>
-        </div>  
-        {completedList.map((task: ITask, key: number) => {
-          return <CompletedTask key={key} task={task} undoTask={undoTask}/>;
-        })}
-      </div>
+      <h1>REACT QUIZ</h1>
+      {gameOver || userAnswers.length === TOTAL_QUESTIONS ? (
+        <button className="start" onClick={startTrivia}>
+          Start
+        </button>
+      ) : (
+        <button className="start" onClick={startTrivia}>
+          Restart
+        </button>
+      )}
+      {!gameOver ? <p className="score">Score: {score}</p> : null}
+      {loading && <p>Loading Questions...</p>}
+      {!loading && !gameOver && (
+        <QuestionCard
+          questionNum={number + 1}
+          totalQuestions={TOTAL_QUESTIONS}
+          question={questions[number].question}
+          answers={questions[number].answers}
+          userAnswer={userAnswers[number]}
+          callback={checkAnswer}
+        />
+      )}
+
+      {!gameOver &&
+      !loading &&
+      userAnswers.length === number + 1 &&
+      number !== TOTAL_QUESTIONS - 1 ? (
+        <button className="next" onClick={nextQuestion}>
+          Next Question
+        </button>
+      ) : null}
     </div>
   );
 };
